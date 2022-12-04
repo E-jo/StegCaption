@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.Drawable
+import android.media.Image
 import android.net.Uri
 import android.os.AsyncTask
 import android.os.Build
@@ -346,9 +347,20 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun Int.toBinary(length: Int): String =
-        String.format("%" + length + "s", this.toString(2)).replace(" ", "0")
+        String.format("%" + length + "s",
+            this.toString(2)).replace(" ", "0")
 
     private fun loadFromUrl(url: String?) {
+        val es = Executors.newSingleThreadExecutor()
+        val downloadCallable = url?.let {
+            DownloadImageCallable(it)
+        }
+        val resultImage = es.submit(downloadCallable)
+        es.shutdown()
+        imageView?.setImageBitmap(resultImage.get())
+    }
+
+    private fun loadFromUrlOldVer(url: String?) {
         imageView?.let { DownloadImageAsyncTask(it).execute(url) }
     }
 

@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.ImageView
 
 class DownloadImageAsyncTask(var imageView: ImageView) : AsyncTask<String, Void, Bitmap?>() {
+    @Deprecated("Deprecated in Java")
     override fun doInBackground(vararg params: String?): Bitmap? {
         val imageUrl = params[0]
         var image: Bitmap? = null
@@ -21,7 +22,9 @@ class DownloadImageAsyncTask(var imageView: ImageView) : AsyncTask<String, Void,
         }
         return image;
     }
+    @Deprecated("Deprecated in Java", ReplaceWith("imageView.setImageBitmap(result)"))
     override fun onPostExecute(result: Bitmap?) {
         imageView.setImageBitmap(result)
     }
 }
+
