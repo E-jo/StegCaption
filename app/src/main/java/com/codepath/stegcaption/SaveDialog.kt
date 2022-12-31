@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioGroup
+import androidx.core.os.bundleOf
 import androidx.fragment.app.DialogFragment
 
 class SaveDialog: DialogFragment() {
@@ -45,9 +46,11 @@ class SaveDialog: DialogFragment() {
 
     private fun saveFile(view: View) {
         val filePath = view.findViewById<EditText>(R.id.et_file2)
-        val listener: SaveDialogListener = activity as SaveDialogListener
-
-        listener.onFinishSaveDialog(filePath.text.toString(), format)
+        parentFragmentManager.setFragmentResult(
+            "saveChoice", bundleOf(
+                "path" to filePath.text.toString(), "format" to format
+            )
+        )
     }
 
 }

@@ -1,19 +1,26 @@
 package com.codepath.stegcaption
 
+import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import androidx.fragment.app.DialogFragment
 import android.widget.EditText
+import androidx.core.os.bundleOf
+import androidx.fragment.app.FragmentManager
+import com.codepath.stegcaption.ui.main.DecodeFragment
 
 class LoadDialog: DialogFragment() {
-
 
     interface LoadDialogListener {
         fun onFinishLoadDialog(path: String?, type: String?)
     }
+
+    public lateinit var pathKey: String
+    public lateinit var typeKey: String
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         dialog!!.window?.setBackgroundDrawableResource(R.drawable.round_corners)
@@ -46,19 +53,27 @@ class LoadDialog: DialogFragment() {
     }
 
     private fun browseFiles() {
-        val listener: LoadDialogListener = activity as LoadDialogListener
-        listener.onFinishLoadDialog("", "browse")
+        parentFragmentManager.setFragmentResult(
+            "loadChoice", bundleOf("path" to "", "type" to "browse"
+            )
+        )
     }
 
     private fun loadUrl(view: View) {
         val urlText = view.findViewById<EditText>(R.id.et_url)
-        val listener: LoadDialogListener = activity as LoadDialogListener
-        listener.onFinishLoadDialog(urlText.text.toString(), "url")
+        parentFragmentManager.setFragmentResult(
+            "loadChoice", bundleOf(
+                "path" to urlText.text.toString(), "type" to "url"
+            )
+        )
     }
 
     private fun loadFile(view: View) {
         val fileText = view.findViewById<EditText>(R.id.et_file)
-        val listener: LoadDialogListener = activity as LoadDialogListener
-        listener.onFinishLoadDialog(fileText.text.toString(), "file")
+        parentFragmentManager.setFragmentResult(
+            "loadChoice", bundleOf(
+                "path" to fileText.text.toString(), "type" to "file"
+            )
+        )
     }
 }

@@ -1,0 +1,400 @@
+package com.codepath.stegcaption.ui.main
+
+import android.app.Activity
+import android.app.ProgressDialog
+import android.content.*
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.Drawable
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import android.view.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.RadioGroup
+import android.widget.TextView
+import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import androidx.core.graphics.blue
+import androidx.core.graphics.drawable.toBitmap
+import androidx.core.graphics.green
+import androidx.core.graphics.red
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
+import com.codepath.stegcaption.DownloadImageAsyncTask
+import com.codepath.stegcaption.LoadDialog
+import com.codepath.stegcaption.R
+import com.codepath.stegcaption.SaveDialog
+import java.io.File
+import java.io.FileOutputStream
+import java.lang.Exception
+
+// TODO: Rename parameter arguments, choose names that match
+// the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
+private const val ARG_PARAM1 = "param1"
+private const val ARG_PARAM2 = "param2"
+
+
+/**
+ * A simple [Fragment] subclass.
+ * Use the [DecodeFragment.newInstance] factory method to
+ * create an instance of this fragment.
+ */
+class DecodeFragment : Fragment() {
+    // TODO: Rename and change types of parameters
+    private var param1: String? = null
+    private var param2: String? = null
+    lateinit var btnDecode: Button
+    lateinit var imgView: ImageView
+    lateinit var btnShare: Button
+    lateinit var btnLoad: Button
+    lateinit var btnSave: Button
+    lateinit var btnCopy: Button
+    lateinit var btnPaste: Button
+    lateinit var colorSelection: RadioGroup
+    lateinit var secretMessage: TextView
+    lateinit var password: EditText
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
+        arguments?.let {
+            param1 = it.getString(ARG_PARAM1)
+            param2 = it.getString(ARG_PARAM2)
+        }
+        childFragmentManager.setFragmentResultListener("loadChoice", this) { _, bundle ->
+            val type = bundle.getString("type")
+            val path = bundle.getString("path")
+            Log.d("StegCap", "load result listener called")
+            when (type) {
+                "url" -> loadFromUrlOldVer(path)
+                "file" -> loadFromFile(path)
+                "browse" -> loadPicker()
+            }
+        }
+        childFragmentManager.setFragmentResultListener("saveChoice", this) { _, bundle ->
+            val path = bundle.getString("path")
+            val format = bundle.getString("format")
+            Log.d("StegCap", "save result listener called")
+            val androidVersion = Build.VERSION.SDK_INT
+            if (androidVersion < Build.VERSION_CODES.R && format == ".webp") {
+                Toast.makeText(context,
+                    "Saving as .webp requires a newer version of Android", Toast.LENGTH_LONG).show()
+            } else {
+                save(path, format)
+            }
+        }
+        Log.d("StegCap", "onCreate() called in decoder tab")
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        // Inflate the layout for this fragment
+        val view: View? = inflater.inflate(R.layout.fragment_decode, container, false)
+        btnDecode = view!!.findViewById(R.id.btnDecode)
+        colorSelection = view.findViewById(R.id.radioGroupColor)
+        btnDecode.setOnClickListener{
+            decode(colorSelection.checkedRadioButtonId)
+        }
+        imgView = view.findViewById(R.id.imageView)
+        btnCopy = view.findViewById(R.id.btnCopy2)
+        btnCopy.setOnClickListener{
+            copy()
+        }
+        btnPaste = view.findViewById(R.id.btnPaste)
+        btnPaste.setOnClickListener{
+            paste()
+        }
+        btnSave = view.findViewById(R.id.btnSave)
+        btnSave.setOnClickListener{
+            saveAction()
+        }
+        btnLoad = view.findViewById(R.id.btnLoad2)
+        btnLoad.setOnClickListener{
+            loadAction()
+        }
+        btnShare = view.findViewById(R.id.btnShare)
+        btnShare.setOnClickListener{
+            share(imgView)
+        }
+        secretMessage = view.findViewById(R.id.textView)
+        password = view.findViewById(R.id.textView2)
+        return view
+    }
+
+    private fun decode(colorCode: Int) {
+        val image: Bitmap = imgView.drawable.toBitmap()
+
+        val lastThreeBytes = byteArrayOf(0x9, 0x9, 0x9)
+        val endingBytes = byteArrayOf(0x0, 0x0, 0x3)
+        var bitIndex = 0
+        var bitString = ""
+        val messageByteArray = mutableListOf<Byte>()
+
+        val progressDialog: ProgressDialog = ProgressDialog(context)
+        progressDialog.setMessage("Decoding")
+        progressDialog.setCancelable(false)
+        progressDialog.show()
+
+        try {
+            loop@ for (y in 0 until image.height) {
+                for (x in 0 until image.width) {
+
+                    // get pixel rgb
+                    val color = image.getPixel(x, y)
+
+                    // keep reading until the three ending bytes are found
+                    Log.d("Ending bytes found: ", "${lastThreeBytes.contentEquals(endingBytes)}")
+
+                    if (!lastThreeBytes.contentEquals(endingBytes)) {
+                        when (colorCode) {
+                            // get the least significant bit from the chosen color
+                            R.id.radioBlue -> bitString += color.blue.toBinary(8)[7]
+                            R.id.radioGreen -> bitString += color.green.toBinary(8)[7]
+                            R.id.radioRed -> bitString += color.red.toBinary(8)[7]
+                        }
+                        bitIndex++
+
+                        // check to see if we are done with a byte
+                        if (bitIndex > 7) {
+                            // if so, update the last three bytes array
+                            lastThreeBytes[0] = lastThreeBytes[lastThreeBytes.lastIndex - 1]
+                            lastThreeBytes[lastThreeBytes.lastIndex - 1] =
+                                lastThreeBytes[lastThreeBytes.lastIndex]
+
+                            // new last byte is also the byte we add to the byte array
+                            // holding our received message
+                            lastThreeBytes[lastThreeBytes.lastIndex] = bitString.toByte(2)
+                            messageByteArray.add(bitString.toByte(2))
+                            Log.d("decoding:", bitString)
+
+                            // reset
+                            bitString = ""
+                            bitIndex = 0
+                        }
+                    } else {
+                        break@loop
+                    }
+                }
+            }
+            Log.d("Message byte array size: ", messageByteArray.size.toString())
+            val password = password.text!!.toString().toByteArray()
+            val mesByteArray = messageByteArray.dropLast(3).toByteArray()
+
+            val decryptedMessage = decrypt(mesByteArray, password)
+
+            secretMessage.setText(decryptedMessage.toString(Charsets.UTF_8))
+        } catch (e: Exception) {
+            //
+        }
+        progressDialog.dismiss()
+    }
+
+    private fun decrypt(encryptedMessage: ByteArray, password: ByteArray) : ByteArray {
+        var passwordByteCounter = 0
+        var passwordBitCounter = 0
+        val decrypted = mutableListOf<Byte>()
+        var decryptedByte = ""
+        for (byte in encryptedMessage) {
+            for (bit in byte.toInt().toBinary(8)) {
+                val passwordBit = password[passwordByteCounter]
+                    .toInt()
+                    .toBinary(8)[passwordBitCounter]
+                decryptedByte += if (passwordBit != bit) {
+                    "1"
+                } else {
+                    "0"
+                }
+                passwordBitCounter++
+                if (passwordBitCounter > 7) {
+                    passwordBitCounter = 0
+                    passwordByteCounter++
+                    decrypted.add(decryptedByte.toByte(2))
+                    decryptedByte = ""
+                    if (passwordByteCounter >= password.size) {
+                        passwordByteCounter = 0
+                    }
+                }
+            }
+        }
+        return decrypted.toByteArray()
+    }
+
+    // File I/O
+    private fun loadAction() {
+        LoadDialog().show(childFragmentManager, "Load")
+    }
+
+    private fun saveAction() {
+        SaveDialog().show(childFragmentManager, "Save")
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun save(fileName: String?, format: String?) {
+        try {
+            val imageNew = activity?.findViewById<ImageView>(R.id.imageView2)
+            val image: Bitmap = imageNew?.drawable!!.toBitmap()
+            val file = File(activity?.getExternalFilesDir("images"), "$fileName$format")
+            val fileOutStream = FileOutputStream(file)
+            when (format) {
+                ".png" -> image.compress(Bitmap.CompressFormat.PNG, 100, fileOutStream)
+                ".webp" -> image.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, fileOutStream)
+            }
+            fileOutStream.flush()
+            fileOutStream.close()
+            val fileLog = "Save file exists: ${file.exists()}\nTried to save to: ${file.absolutePath}"
+            Toast.makeText(context, fileLog, Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            e.message?.let { Log.d("Error", it) }
+            e.printStackTrace()
+        }
+    }
+
+    private fun loadFromFile(fileName: String?) {
+        val file = File(activity?.getExternalFilesDir("images"), "$fileName")
+        Log.d("StegCap", "Load file exists: ${file.exists()}\nTried to load from: ${file.absolutePath}")
+        imgView.setImageDrawable(Drawable.createFromPath(file.toString()))
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val cr: ContentResolver = activity?.contentResolver!!
+        if (requestCode == 0 && resultCode == Activity.RESULT_OK) {
+            data?.data?.also { uri ->
+                try {
+                    val inputStream = cr.openInputStream(uri)
+                    val image = BitmapFactory.decodeStream(inputStream)
+                    imgView.setImageBitmap(image)
+                } catch (e: Exception) {
+                    e.message?.let {
+                        Log.e("Error", it)
+                    }
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+
+
+    private fun share(imageView: ImageView) {
+        val image: Bitmap = imageView.drawable.toBitmap()
+        val file = File(activity?.getExternalFilesDir("images"), "temp.png")
+        val fileOutStream = FileOutputStream(file)
+        image.compress(Bitmap.CompressFormat.PNG, 100, fileOutStream)
+        fileOutStream.flush()
+        fileOutStream.close()
+        val contentUri = activity?.applicationContext?.let {
+            FileProvider.getUriForFile(
+                it,
+                "com.codepath.stegcaption.fileprovider",
+                file
+            )
+        }
+        val shareIntent: Intent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_STREAM, contentUri)
+            type = "image/png"
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        startActivity(Intent.createChooser(shareIntent, "Share Image"))
+        file.deleteOnExit()
+    }
+
+    private fun copy() {
+        try {
+            val clipboardManager = activity?.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val image: Bitmap = imgView.drawable!!.toBitmap()
+            val file = File(activity?.getExternalFilesDir("images"), "temp.png")
+            val fileOutStream = FileOutputStream(file)
+            image.compress(Bitmap.CompressFormat.PNG, 100, fileOutStream)
+            fileOutStream.flush()
+            fileOutStream.close()
+            val contentUri = activity?.applicationContext?.let {
+                FileProvider.getUriForFile(
+                    it,
+                    "com.codepath.stegcaption.fileprovider",
+                    file
+                )
+            }
+            val clip: ClipData = ClipData.newUri(activity?.contentResolver, "URI", contentUri)
+            clipboardManager.setPrimaryClip(clip)
+            file.deleteOnExit()
+        } catch (e: Exception) {
+            e.message?.let {
+                Log.e("Error", it)
+            }
+            e.printStackTrace()
+        }
+    }
+
+    private fun paste() {
+        try {
+            val cr: ContentResolver? = activity?.contentResolver
+            val clipboardManager = activity?.getSystemService(AppCompatActivity.CLIPBOARD_SERVICE) as ClipboardManager
+            val pasteData = clipboardManager.primaryClip
+            val contentUri = pasteData!!.getItemAt(0).uri
+
+            val inputStream = cr?.openInputStream(contentUri)
+            val image = BitmapFactory.decodeStream(inputStream)
+            imgView.setImageBitmap(image)
+        } catch (e: Exception) {
+            e.message?.let {
+                Log.e("Error", it)
+            }
+            e.printStackTrace()
+        }
+    }
+
+    private fun loadPicker() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+        }
+        startActivityForResult(intent, 0)
+    }
+
+    private fun loadFromUrlOldVer(url: String?) {
+        imgView.let { DownloadImageAsyncTask(it).execute(url) }
+    }
+
+    // helper functions
+    private fun setLeastSignificantBit(x: Int, y: Char): Int {
+        val xBinary = x.toBinary(8)
+        val newX = (xBinary.subSequence(0, xBinary.length - 1)).toString() + y
+        return newX.toInt(2)
+    }
+
+    private fun Int.toBinary(length: Int): String =
+        String.format("%" + length + "s",
+            this.toString(2)).replace(" ", "0")
+
+    companion object {
+        /**
+         * Use this factory method to create a new instance of
+         * this fragment using the provided parameters.
+         *
+         * @param param1 Parameter 1.
+         * @param param2 Parameter 2.
+         * @return A new instance of fragment DecodeFragment.
+         */
+        // TODO: Rename and change types and number of parameters
+        @JvmStatic
+        fun newInstance(param1: String, param2: String) =
+            DecodeFragment().apply {
+                arguments = Bundle().apply {
+                    putString(ARG_PARAM1, param1)
+                    putString(ARG_PARAM2, param2)
+                }
+            }
+
+    }
+}

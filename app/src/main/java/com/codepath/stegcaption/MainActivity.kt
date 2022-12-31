@@ -13,6 +13,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.annotation.RequiresApi
@@ -27,8 +30,8 @@ import java.lang.Exception
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity(),
-    LoadDialog.LoadDialogListener, SaveDialog.SaveDialogListener {
+class MainActivity : AppCompatActivity(), SaveDialog.SaveDialogListener,
+    LoadDialog.LoadDialogListener {
 
     var checkMessage = byteArrayOf()
     var imageView: ImageView? = null
@@ -105,12 +108,48 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        Log.d("StegCap", "onCreateOptionsMenu() called")
+        val inflater: MenuInflater = menuInflater
+        inflater.inflate(R.menu.menu_tabbed_main, menu)
+        super.onCreateOptionsMenu(menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.menu_help -> Log.d("StegCap", "Help menu item clicked")
+            R.id.menu_exit -> Log.d("StegCap", "Exit menu item clicked")
+            else -> return super.onOptionsItemSelected(item)
+        }
+        return true
+    }
+
     private fun loadAction() {
         LoadDialog().show(supportFragmentManager, "Load")
     }
 
     private fun saveAction() {
         SaveDialog().show(supportFragmentManager, "Save")
+    }
+
+    override fun onFinishLoadDialog(path: String?, type: String?) {
+        when (type) {
+            "url" -> loadFromUrl(path)
+            "file" -> loadFromFile(path)
+            "browse" -> loadPicker()
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    override fun onFinishSaveDialog(path: String?, format: String?) {
+        val androidVersion = Build.VERSION.SDK_INT
+        if (androidVersion < Build.VERSION_CODES.R && format == ".webp") {
+            Toast.makeText(this,
+                "Saving as .webp requires a newer version of Android", Toast.LENGTH_LONG).show()
+        } else {
+            save(path, format)
+        }
     }
 
     private fun loadFromFile(fileName: String?) {
@@ -227,7 +266,6 @@ class MainActivity : AppCompatActivity(),
         val newImage = Bitmap.createBitmap(newImageColors.toIntArray(),
             image.width, image.height, Bitmap.Config.ARGB_8888)
         imageNew.setImageBitmap(newImage)
-
     }
 
     private fun decode(colorCode: Int) {
@@ -237,29 +275,43 @@ class MainActivity : AppCompatActivity(),
         val lastThreeBytes = byteArrayOf(0x9, 0x9, 0x9)
         val endingBytes = byteArrayOf(0x0, 0x0, 0x3)
         var bitIndex = 0
-        var byteString = ""
+        var bitString = ""
         val messageByteArray = mutableListOf<Byte>()
 
         try {
             loop@ for (y in 0 until image.height) {
                 for (x in 0 until image.width) {
+
+                    // get pixel rgb
                     val color = image.getPixel(x, y)
+
+                    // keep reading until the three ending bytes are found
                     Log.d("Ending bytes found: ", "${lastThreeBytes.contentEquals(endingBytes)}")
+
                     if (!lastThreeBytes.contentEquals(endingBytes)) {
                         when (colorCode) {
-                            R.id.radioBlue -> byteString += color.blue.toBinary(8)[7]
-                            R.id.radioGreen -> byteString += color.green.toBinary(8)[7]
-                            R.id.radioRed -> byteString += color.red.toBinary(8)[7]
+                            // get the least significant bit from the chosen color
+                            R.id.radioBlue -> bitString += color.blue.toBinary(8)[7]
+                            R.id.radioGreen -> bitString += color.green.toBinary(8)[7]
+                            R.id.radioRed -> bitString += color.red.toBinary(8)[7]
                         }
                         bitIndex++
+
+                        // check to see if we are done with a byte
                         if (bitIndex > 7) {
+                            // if so, update the last three bytes array
                             lastThreeBytes[0] = lastThreeBytes[lastThreeBytes.lastIndex - 1]
                             lastThreeBytes[lastThreeBytes.lastIndex - 1] =
                                 lastThreeBytes[lastThreeBytes.lastIndex]
-                            lastThreeBytes[lastThreeBytes.lastIndex] = byteString.toByte(2)
-                            messageByteArray.add(byteString.toByte(2))
-                            Log.d("decoding:", byteString)
-                            byteString = ""
+
+                            // new last byte is also the byte we add to the byte array
+                            // holding our received message
+                            lastThreeBytes[lastThreeBytes.lastIndex] = bitString.toByte(2)
+                            messageByteArray.add(bitString.toByte(2))
+                            Log.d("decoding:", bitString)
+
+                            // reset
+                            bitString = ""
                             bitIndex = 0
                         }
                     } else {
@@ -409,14 +461,6 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    override fun onFinishLoadDialog(path: String?, type: String?) {
-        when (type) {
-            "url" -> loadFromUrl(path)
-            "file" -> loadFromFile(path)
-            "browse" -> loadPicker()
-        }
-    }
-
     private fun loadPicker() {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -425,6 +469,7 @@ class MainActivity : AppCompatActivity(),
         startActivityForResult(intent, 0)
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val cr: ContentResolver = contentResolver
@@ -442,17 +487,6 @@ class MainActivity : AppCompatActivity(),
                     e.printStackTrace()
                 }
             }
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.R)
-    override fun onFinishSaveDialog(path: String?, format: String?) {
-        val androidVersion = Build.VERSION.SDK_INT
-        if (androidVersion < Build.VERSION_CODES.R && format == ".webp") {
-            Toast.makeText(this,
-                "Saving as .webp requires a newer version of Android", Toast.LENGTH_LONG).show()
-        } else {
-            save(path, format)
         }
     }
 
