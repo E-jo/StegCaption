@@ -48,6 +48,7 @@ class EncodeFragment : Fragment() {
     lateinit var colorChoice: RadioGroup
     lateinit var secretMessage: EditText
     lateinit var password: EditText
+    lateinit var progressBar: ProgressBar
 
     //private var _binding: FragmentTabbedMainBinding? = null
     //private val binding get() = _binding!!
@@ -117,6 +118,8 @@ class EncodeFragment : Fragment() {
         btnShare.setOnClickListener{
             share(imgView)
         }
+        progressBar = view.findViewById(R.id.progressBar2)
+
         secretMessage = view.findViewById(R.id.textView)
         password = view.findViewById(R.id.textView2)
         secretMessage = view.findViewById(R.id.textView)
@@ -125,6 +128,8 @@ class EncodeFragment : Fragment() {
     }
 
     private fun encode(colorCode: Int) {
+        progressBar.visibility = View.VISIBLE
+
         var checkMessage = byteArrayOf()
 
         val image: Bitmap = imgView.drawable.toBitmap()
@@ -214,6 +219,7 @@ class EncodeFragment : Fragment() {
         val newImage = Bitmap.createBitmap(newImageColors.toIntArray(),
             image.width, image.height, Bitmap.Config.ARGB_8888)
         imgView.setImageBitmap(newImage)
+        progressBar.visibility = View.INVISIBLE
     }
 
     private fun encrypt(message: ByteArray, password: ByteArray) : ByteArray {

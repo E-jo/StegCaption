@@ -13,10 +13,12 @@ import android.view.*
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.graphics.blue
@@ -58,6 +60,7 @@ class DecodeFragment : Fragment() {
     lateinit var colorSelection: RadioGroup
     lateinit var secretMessage: TextView
     lateinit var password: EditText
+    lateinit var progressBar: ProgressBar
 
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -124,12 +127,14 @@ class DecodeFragment : Fragment() {
         btnShare.setOnClickListener{
             share(imgView)
         }
+        progressBar = view.findViewById(R.id.progressBar)
         secretMessage = view.findViewById(R.id.textView)
         password = view.findViewById(R.id.textView2)
         return view
     }
 
     private fun decode(colorCode: Int) {
+        progressBar.visibility = View.VISIBLE
         val image: Bitmap = imgView.drawable.toBitmap()
 
         val lastThreeBytes = byteArrayOf(0x9, 0x9, 0x9)
@@ -137,11 +142,6 @@ class DecodeFragment : Fragment() {
         var bitIndex = 0
         var bitString = ""
         val messageByteArray = mutableListOf<Byte>()
-
-        val progressDialog: ProgressDialog = ProgressDialog(context)
-        progressDialog.setMessage("Decoding")
-        progressDialog.setCancelable(false)
-        progressDialog.show()
 
         try {
             loop@ for (y in 0 until image.height) {
@@ -190,11 +190,11 @@ class DecodeFragment : Fragment() {
 
             val decryptedMessage = decrypt(mesByteArray, password)
 
-            secretMessage.setText(decryptedMessage.toString(Charsets.UTF_8))
+            secretMessage.text = decryptedMessage.toString(Charsets.UTF_8)
         } catch (e: Exception) {
             //
         }
-        progressDialog.dismiss()
+        progressBar.visibility = View.INVISIBLE
     }
 
     private fun decrypt(encryptedMessage: ByteArray, password: ByteArray) : ByteArray {

@@ -33,7 +33,6 @@ class TabbedMainActivity : AppCompatActivity() {
         val tabs: TabLayout = binding.tabs
         tabs.setupWithViewPager(viewPager)
         Log.d("StegCap", "onCreate() called")
-
     }
 
 
